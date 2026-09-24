@@ -1,7 +1,9 @@
 """
-Watches a Telegram chat/channel for new "thoughts", turns each one into a
-LinkedIn post in Meera Pillai's voice via Gemini, and replies with the draft
-immediately in the same Telegram chat.
+Watches a Telegram chat/channel for new "thoughts". Each one is first run
+through the LinkedIn post qualifier rubric; if it qualifies, it's turned into
+a LinkedIn post in Meera Pillai's voice via Gemini and replied back
+immediately. If it doesn't qualify, the bot replies saying so instead of
+drafting anything.
 
 Run:
     python main.py
@@ -14,11 +16,20 @@ import config
 import state_store
 import telegram_client
 from gemini_client import draft_linkedin_post
+from qualifier import evaluate_thought
 
 
 def extract_message(update: dict):
     """A Telegram update is either a regular message or a channel post."""
     return update.get("message") or update.get("channel_post")
+
+
+def build_discard_reply(result) -> str:
+    score = f"{result.score}/8" if result.score is not None else "unscored"
+    reason = result.to_strengthen or "Doesn't clear the bar on enough metrics."
+    return (
+        f"This can be ignored for LinkedIn post (score {score}).\n\n{reason}"
+    )
 
 
 def process_update(update: dict):
@@ -33,27 +44,51 @@ def process_update(update: dict):
     if not text:
         print(
             f"[skip] update {update['update_id']} has no text/caption "
-            "(e.g. a photo with no caption) — nothing to draft from."
+            "(e.g. a photo with no caption) — nothing to evaluate."
         )
         return
+
+    chat_id = message["chat"]["id"]
+    reply_id = message.get("message_id")
 
     print(f"[thought] {text[:80]!r}...")
     try:
-        post = draft_linkedin_post(text)
+        result = evaluate_thought(text)
     except Exception as exc:
-        print(f"[error] Gemini draft failed: {exc}", file=sys.stderr)
+        print(f"[error] Qualifier failed: {exc}", file=sys.stderr)
         telegram_client.send_reply(
-            message["chat"]["id"],
-            f"Couldn't draft a post for that one — {exc}",
-            reply_to_message_id=message.get("message_id"),
+            chat_id,
+            f"Couldn't evaluate that one — {exc}",
+            reply_to_message_id=reply_id,
         )
         return
 
-    telegram_client.send_reply(
-        message["chat"]["id"],
-        post,
-        reply_to_message_id=message.get("message_id"),
-    )
+    if result.verdict is None:
+        print("[warn] Qualifier output didn't parse — sending raw rubric for review.")
+        telegram_client.send_reply(chat_id, result.raw_text, reply_to_message_id=reply_id)
+        return
+
+    print(f"[qualifier] verdict={result.verdict} score={result.score}/8")
+
+    if result.verdict == "DISCARD":
+        telegram_client.send_reply(
+            chat_id, build_discard_reply(result), reply_to_message_id=reply_id
+        )
+        print("[done] marked as skip, no draft made.")
+        return
+
+    try:
+        post = draft_linkedin_post(text, angle=result.angle)
+    except Exception as exc:
+        print(f"[error] Gemini draft failed: {exc}", file=sys.stderr)
+        telegram_client.send_reply(
+            chat_id,
+            f"Qualified (score {result.score}/8) but couldn't draft a post — {exc}",
+            reply_to_message_id=reply_id,
+        )
+        return
+
+    telegram_client.send_reply(chat_id, post, reply_to_message_id=reply_id)
     print("[done] draft sent back to Telegram.")
 
 

@@ -19,6 +19,7 @@ POLL_INTERVAL_SECONDS = float(os.environ.get("POLL_INTERVAL_SECONDS", "5"))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "data", "state.json")
 SKILL_DIR = os.path.join(BASE_DIR, "skills", "meera-pillai-voice")
+QUALIFIER_SKILL_DIR = os.path.join(BASE_DIR, "skills", "meera-linkedin-post-qualifier")
 
 
 def require_keys():

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import requests
 
 import config
@@ -23,19 +25,22 @@ return only the post text (placeholders and all).
 """
 
 
-def draft_linkedin_post(thought: str) -> str:
-    system_prompt = load_voice_prompt() + _INSTRUCTION_SUFFIX
+def generate(system_prompt: str, user_text: str, temperature: float = 0.8) -> str:
+    """Low-level Gemini call, shared by drafting and qualifying.
 
+    Rotates across config.GEMINI_API_KEYS on auth/quota failures (401/403/429)
+    so a revoked or exhausted key doesn't take the whole pipeline down.
+    """
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": [
             {
                 "role": "user",
-                "parts": [{"text": f"Raw thought:\n\n{thought}"}],
+                "parts": [{"text": user_text}],
             }
         ],
         "generationConfig": {
-            "temperature": 0.8,
+            "temperature": temperature,
         },
     }
 
@@ -61,3 +66,11 @@ def draft_linkedin_post(thought: str) -> str:
             raise RuntimeError(f"Unexpected Gemini response shape: {data}") from exc
 
     raise last_error or RuntimeError("No Gemini API keys configured.")
+
+
+def draft_linkedin_post(thought: str, angle: str | None = None) -> str:
+    system_prompt = load_voice_prompt() + _INSTRUCTION_SUFFIX
+    user_text = f"Raw thought:\n\n{thought}"
+    if angle:
+        user_text += f"\n\nThe angle to write it from:\n\n{angle}"
+    return generate(system_prompt, user_text)
