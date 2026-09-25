@@ -8,6 +8,7 @@ Telegram's side (setting a webhook disables getUpdates, and vice versa).
 
 import sys
 
+import config
 import news_client
 import telegram_client
 from gemini_client import draft_linkedin_post
@@ -28,9 +29,15 @@ def build_discard_reply(result) -> str:
 def process_update(update: dict):
     message = extract_message(update)
     if not message:
+        print(f"[skip] update {update.get('update_id')} has no message/channel_post.")
         return
 
     if not telegram_client.matches_target_chat(message):
+        print(
+            f"[skip] update {update.get('update_id')} chat_id="
+            f"{message.get('chat', {}).get('id')!r} doesn't match configured "
+            f"TELEGRAM_CHAT_ID={config.TELEGRAM_CHAT_ID!r}."
+        )
         return
 
     text = message.get("text") or message.get("caption")

@@ -38,8 +38,15 @@ def matches_target_chat(message: dict) -> bool:
     TELEGRAM_CHAT_ID may be a numeric id (as a string) or an @username.
     """
     chat = message.get("chat", {})
-    target = config.TELEGRAM_CHAT_ID
-    if target.lstrip("-").isdigit():
-        return str(chat.get("id")) == target
+    target = config.TELEGRAM_CHAT_ID.strip()
+
+    target_numeric = target[1:] if target.startswith("-") else target
+    if target_numeric.isdigit():
+        try:
+            return chat.get("id") == int(target)
+        except ValueError:
+            return False
+
     username = chat.get("username")
-    return bool(username) and f"@{username}" == target
+    target_username = target.lstrip("@")
+    return bool(username) and username == target_username

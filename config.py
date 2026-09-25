@@ -5,13 +5,19 @@ load_dotenv()
 
 
 def _env(name: str, default: str = "") -> str:
-    """os.environ.get, but treats a present-but-empty value as unset.
+    """os.environ.get, but treats a present-but-empty value as unset and
+    strips incidental whitespace/quotes.
 
     Vercel (and other dashboards) can end up storing an env var with an
-    empty string value rather than leaving it unset, which silently
-    defeats a plain os.environ.get(name, default).
+    empty string, or with surrounding whitespace/quotes from a pasted .env
+    blob, either of which silently defeats a plain os.environ.get(name,
+    default) or a strict string-equality check downstream.
     """
-    return os.environ.get(name) or default
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    value = value.strip().strip('"').strip("'")
+    return value or default
 
 
 TELEGRAM_BOT_TOKEN = _env("TELEGRAM_BOT_TOKEN")
