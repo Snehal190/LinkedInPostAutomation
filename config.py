@@ -16,6 +16,10 @@ GEMINI_API_KEYS = [k.strip() for k in _keys_csv.split(",") if k.strip()] or (
 )
 POLL_INTERVAL_SECONDS = float(os.environ.get("POLL_INTERVAL_SECONDS", "5"))
 
+# Only used by the Vercel webhook path (api/webhook.py), to verify incoming
+# requests really came from Telegram. Not needed for local polling.
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "data", "state.json")
 SKILL_DIR = os.path.join(BASE_DIR, "skills", "meera-pillai-voice")
