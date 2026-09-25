@@ -3,22 +3,33 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")
+
+def _env(name: str, default: str = "") -> str:
+    """os.environ.get, but treats a present-but-empty value as unset.
+
+    Vercel (and other dashboards) can end up storing an env var with an
+    empty string value rather than leaving it unset, which silently
+    defeats a plain os.environ.get(name, default).
+    """
+    return os.environ.get(name) or default
+
+
+TELEGRAM_BOT_TOKEN = _env("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = _env("TELEGRAM_CHAT_ID")
+GEMINI_API_KEY = _env("GEMINI_API_KEY")
+GEMINI_MODEL = _env("GEMINI_MODEL", "gemini-3.1-pro-preview")
 
 # Optional comma-separated list of keys to rotate through on failure/quota
 # errors. Falls back to just GEMINI_API_KEY if unset.
-_keys_csv = os.environ.get("GEMINI_API_KEYS", "")
+_keys_csv = _env("GEMINI_API_KEYS")
 GEMINI_API_KEYS = [k.strip() for k in _keys_csv.split(",") if k.strip()] or (
     [GEMINI_API_KEY] if GEMINI_API_KEY else []
 )
-POLL_INTERVAL_SECONDS = float(os.environ.get("POLL_INTERVAL_SECONDS", "5"))
+POLL_INTERVAL_SECONDS = float(_env("POLL_INTERVAL_SECONDS", "5"))
 
 # Only used by the Vercel webhook path (api/webhook.py), to verify incoming
 # requests really came from Telegram. Not needed for local polling.
-TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+TELEGRAM_WEBHOOK_SECRET = _env("TELEGRAM_WEBHOOK_SECRET")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "data", "state.json")
