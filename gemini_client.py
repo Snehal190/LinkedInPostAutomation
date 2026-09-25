@@ -17,11 +17,30 @@ You are drafting a LinkedIn post from a raw thought Meera jotted down on
 Telegram. Turn that thought into a single LinkedIn post in her voice,
 following the "LinkedIn post" format spec and the argument arc above as
 closely as the thought allows — but do not force beats that don't fit a
-short thought. Output ONLY the finished post text: no preamble, no
-"Here's a draft", no markdown formatting, no quotation marks around it. If
-the thought is missing a fact you'd need to invent, use a bracketed
-[DATA NEEDED: ...] placeholder inline rather than making it up, and still
-return only the post text (placeholders and all).
+short thought. If the thought is missing a fact you'd need to invent, use a
+bracketed [DATA NEEDED: ...] placeholder inline rather than making it up.
+
+Your response must start with exactly one line: "NEWS_USED: yes" or
+"NEWS_USED: no" — then a blank line, then ONLY the finished post text: no
+preamble, no "Here's a draft", no markdown formatting, no quotation marks
+around it, no source citation or link in the body (that's handled
+separately).
+"""
+
+_NEWS_BLOCK_TEMPLATE = """
+
+A candidate news item was found for this thought:
+
+Headline: {headline}
+Source: {source}
+Date: {date}
+Summary: {summary}
+
+If this news item is genuinely relevant to the thought, use it to make the
+post timely — reference it naturally, in passing, the way she'd mention
+something she just read, not as a citation dump. If it doesn't fit
+naturally, ignore it completely and draft from the thought alone. Either
+way, do not put a URL in the post body.
 """
 
 
@@ -68,9 +87,31 @@ def generate(system_prompt: str, user_text: str, temperature: float = 0.8) -> st
     raise last_error or RuntimeError("No Gemini API keys configured.")
 
 
-def draft_linkedin_post(thought: str, angle: str | None = None) -> str:
+def draft_linkedin_post(
+    thought: str, angle: str | None = None, news_item=None
+) -> tuple[str, bool]:
+    """Returns (post_text, news_used)."""
     system_prompt = load_voice_prompt() + _INSTRUCTION_SUFFIX
     user_text = f"Raw thought:\n\n{thought}"
     if angle:
         user_text += f"\n\nThe angle to write it from:\n\n{angle}"
-    return generate(system_prompt, user_text)
+    if news_item is not None:
+        user_text += _NEWS_BLOCK_TEMPLATE.format(
+            headline=news_item.headline,
+            source=news_item.source or "unknown publication",
+            date=news_item.date or "date unknown",
+            summary=news_item.summary or news_item.headline,
+        )
+
+    raw = generate(system_prompt, user_text)
+    return _split_news_flag(raw)
+
+
+def _split_news_flag(raw: str) -> tuple[str, bool]:
+    first_line, _, rest = raw.partition("\n")
+    if first_line.strip().upper().startswith("NEWS_USED:"):
+        used = "yes" in first_line.lower()
+        return rest.strip(), used
+    # Model didn't follow the format — treat the whole thing as the post,
+    # and be conservative about whether news was actually used.
+    return raw.strip(), False

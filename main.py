@@ -13,6 +13,7 @@ import sys
 import time
 
 import config
+import news_client
 import state_store
 import telegram_client
 from gemini_client import draft_linkedin_post
@@ -77,8 +78,20 @@ def process_update(update: dict):
         print("[done] marked as skip, no draft made.")
         return
 
+    news_item = None
     try:
-        post = draft_linkedin_post(text, angle=result.angle)
+        query = news_client.extract_keywords(text)
+        print(f"[news] keywords: {query!r}")
+        news_item = news_client.fetch_top_news(query)
+        if news_item:
+            print(f"[news] found: {news_item.headline!r} ({news_item.source})")
+        else:
+            print("[news] no relevant article found.")
+    except Exception as exc:
+        print(f"[warn] News lookup failed, drafting without it: {exc}", file=sys.stderr)
+
+    try:
+        post, news_used = draft_linkedin_post(text, angle=result.angle, news_item=news_item)
     except Exception as exc:
         print(f"[error] Gemini draft failed: {exc}", file=sys.stderr)
         telegram_client.send_reply(
@@ -87,6 +100,10 @@ def process_update(update: dict):
             reply_to_message_id=reply_id,
         )
         return
+
+    if news_used and news_item:
+        post += news_client.build_verify_footer(news_item)
+        print("[news] used in draft — verify footer attached.")
 
     telegram_client.send_reply(chat_id, post, reply_to_message_id=reply_id)
     print("[done] draft sent back to Telegram.")
